@@ -1,4 +1,5 @@
 import { useState, useReducer } from 'react';
+import AuthPage from './components/AuthPage';
 import Sidebar from './components/Sidebar';
 import MainChat from './components/MainChat';
 import EvidencePanel from './components/EvidencePanel';
@@ -36,6 +37,7 @@ function subjectsReducer(state, action) {
 }
 
 function App() {
+  const [user, setUser] = useState(null);
   const [subjects, dispatch] = useReducer(subjectsReducer, initialSubjects);
   const [activeSubjectId, setActiveSubjectId] = useState('sub1');
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
@@ -45,6 +47,11 @@ function App() {
   const [evidenceCards, setEvidenceCards] = useState([]);
   const [evidenceQuery, setEvidenceQuery] = useState('');
   const [highlightCitation, setHighlightCitation] = useState(null);
+
+  // Show auth page if not logged in
+  if (!user) {
+    return <AuthPage onLogin={(u) => setUser(u)} />;
+  }
 
   const activeSubject = subjects.find(s => s.id === activeSubjectId);
 
@@ -57,6 +64,8 @@ function App() {
         dispatch={dispatch}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        userName={user.name}
+        onLogout={() => setUser(null)}
       />
 
       <MainChat

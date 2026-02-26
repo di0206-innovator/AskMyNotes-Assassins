@@ -46,7 +46,7 @@ function EditableName({ name, onSave }) {
     );
 }
 
-export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch, isOpen, onClose }) {
+export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch, isOpen, onClose, userName, onLogout }) {
     const [parsingFiles, setParsingFiles] = useState({});
     const fileInputRefs = useRef({});
 
@@ -84,7 +84,7 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
     return (
         <div className={`sidebar-panel ${isOpen ? 'open' : ''}`}>
             <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontSize: '1.2rem', margin: 0, letterSpacing: '0.05em' }}>AskMyNotes</h2>
+                <h2 style={{ fontSize: '1.2rem', margin: 0, letterSpacing: '0.05em', fontFamily: 'var(--font-display)', background: 'linear-gradient(135deg, #C8A96E, #E8D5A8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>AskMyNotes</h2>
                 <button onClick={onClose} className="responsive-toggle" style={{ background: 'var(--surface-color)', padding: '4px 8px', borderRadius: '4px' }}>✕</button>
             </div>
 
@@ -177,6 +177,25 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
                         </div>
                     );
                 })}
+            </div>
+
+            {/* User Profile */}
+            <div style={{ padding: '1rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, #C8A96E, #A88B4A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 700, color: '#000', flexShrink: 0 }}>
+                    {(userName || '?')[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
+                </div>
+                <button
+                    onClick={onLogout}
+                    style={{ fontSize: '0.75rem', opacity: 0.5, padding: '4px 8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', transition: 'all 0.2s' }}
+                    onMouseOver={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                    title="Sign out"
+                >
+                    Logout
+                </button>
             </div>
         </div>
     );
