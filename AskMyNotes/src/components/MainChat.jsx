@@ -143,19 +143,34 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
         setLoading(true);
         setEvidenceQuery(question);
 
+        console.log('[MainChat] Question:', question);
+        console.log('[MainChat] Subject chunks:', subject.notesChunks.length);
+
         try {
-            const { topChunks, insufficientContext } = retrieveChunks(question, subject.notesChunks);
+            // If no files uploaded at all, show NOT_FOUND
+            if (!subject.notesChunks || subject.notesChunks.length === 0) {
+                console.warn('[MainChat] No notes uploaded for this subject');
+                const updatedHistory = [...subject.conversationHistory, { role: 'user', content: question }];
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: updatedHistory });
+
+                const parsedInfo = { answer: 'NOT_FOUND', subjectName: subject.name };
+                const finalHistory = [...updatedHistory, { role: 'assistant', content: parsedInfo.answer, parsed: parsedInfo }];
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: finalHistory });
+                setLoading(false);
+                setTimeout(scrollToBottom, 100);
+                return;
+            }
+
+            const { topChunks } = retrieveChunks(question, subject.notesChunks);
             setEvidenceCards(topChunks);
+            console.log('[MainChat] Retrieved chunks:', topChunks.length);
 
             const updatedHistory = [...subject.conversationHistory, { role: 'user', content: question }];
             dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: updatedHistory });
 
-            let parsedInfo = null;
-            if (insufficientContext) {
-                parsedInfo = { answer: 'NOT_FOUND', subjectName: subject.name };
-            } else {
-                parsedInfo = await askGemini(subject.name, topChunks, subject.conversationHistory, question);
-            }
+            console.log('[MainChat] Calling Gemini API...');
+            const parsedInfo = await askGemini(subject.name, topChunks, subject.conversationHistory, question);
+            console.log('[MainChat] Gemini response:', parsedInfo);
 
             if (parsedInfo.answer === 'NOT_FOUND') {
                 parsedInfo.subjectName = subject.name;
@@ -171,7 +186,8 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
             }
 
         } catch (err) {
-            setToast(err.message);
+            console.error('[MainChat] Error:', err);
+            setToast(err.message || 'Something went wrong. Please try again.');
         } finally {
             setLoading(false);
             setTimeout(scrollToBottom, 100);
