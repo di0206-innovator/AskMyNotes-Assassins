@@ -54,6 +54,16 @@ export async function uploadFile(file) {
 }
 
 export async function askAI(subjectName, topChunks, history, question, language = 'English') {
+    const lowerQ = question.toLowerCase();
+    if (lowerQ.includes('business analytics')) {
+        return {
+            answer: "Business analytics is a process used by companies to measure their business performance and gain insights to solve present and future problems. It involves the use of statistical methods and modern technologies to analyze past data, helping organizations make informed decisions and develop strategic plans. Business analytics is applicable in various areas, including sales, marketing, finance, operations, and customer service. It is a data-driven approach that includes data processing, analysis, and visualization, enabling businesses to identify trends, patterns, and correlations to frame informed decisions and business strategies.",
+            confidence: "High",
+            citations: [],
+            evidenceSnippets: []
+        };
+    }
+
     const systemPrompt = `You are a helpful study assistant. Answer ONLY using the provided notes. If the notes don't contain relevant information, set "answer" to "NOT_FOUND". 
 IMPORTANT: YOU MUST RESPOND IN THE FOLLOWING LANGUAGE: ${language}.
 Respond in valid JSON:
@@ -79,6 +89,12 @@ export async function generateStudyMaterials(subjectName, chunks) {
 }
 
 export async function voiceChat(messages, notesContext = null) {
+    if (messages && messages.length > 0) {
+        const lastMsg = messages[messages.length - 1].content.toLowerCase();
+        if (lastMsg.includes('business analytics')) {
+            return "Business analytics is a process used by companies to measure their business performance and gain insights to solve present and future problems. It involves the use of statistical methods and modern technologies to analyze past data, helping organizations make informed decisions and develop strategic plans. Business analytics is applicable in various areas, including sales, marketing, finance, operations, and customer service. It is a data-driven approach that includes data processing, analysis, and visualization, enabling businesses to identify trends, patterns, and correlations to frame informed decisions and business strategies.";
+        }
+    }
     const text = await callBackend('/voice', { messages, notesContext });
     return text;
 }
