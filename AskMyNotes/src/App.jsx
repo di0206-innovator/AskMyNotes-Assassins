@@ -4,12 +4,13 @@ import Sidebar from './components/Sidebar';
 import MainChat from './components/MainChat';
 import EvidencePanel from './components/EvidencePanel';
 import StudyMode from './components/StudyMode';
+import VoiceChat from './components/VoiceChat';
 import './App.css';
 
 const initialSubjects = [
-  { id: 'sub1', name: 'Subject 1', colorHex: '#C8A96E', files: [], notesChunks: [], conversationHistory: [] },
-  { id: 'sub2', name: 'Subject 2', colorHex: '#6E9EC8', files: [], notesChunks: [], conversationHistory: [] },
-  { id: 'sub3', name: 'Subject 3', colorHex: '#9EC87A', files: [], notesChunks: [], conversationHistory: [] },
+  { id: 'sub1', name: 'Subject 1', colorHex: '#6366f1', files: [], notesChunks: [], conversationHistory: [] },
+  { id: 'sub2', name: 'Subject 2', colorHex: '#8b5cf6', files: [], notesChunks: [], conversationHistory: [] },
+  { id: 'sub3', name: 'Subject 3', colorHex: '#06b6d4', files: [], notesChunks: [], conversationHistory: [] },
 ];
 
 function subjectsReducer(state, action) {
@@ -21,11 +22,7 @@ function subjectsReducer(state, action) {
     case 'REMOVE_FILE':
       return state.map(s => {
         if (s.id !== action.subjectId) return s;
-        return {
-          ...s,
-          files: s.files.filter(f => f.name !== action.fileName),
-          notesChunks: s.notesChunks.filter(c => c.fileName !== action.fileName)
-        };
+        return { ...s, files: s.files.filter(f => f.name !== action.fileName), notesChunks: s.notesChunks.filter(c => c.fileName !== action.fileName) };
       });
     case 'ADD_CHUNKS':
       return state.map(s => s.id === action.subjectId ? { ...s, notesChunks: [...s.notesChunks, ...action.chunks] } : s);
@@ -43,65 +40,53 @@ function App() {
   const [isEvidenceOpen, setIsEvidenceOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isStudyModeOpen, setIsStudyModeOpen] = useState(false);
+  const [isVoiceChatOpen, setIsVoiceChatOpen] = useState(false);
 
   const [evidenceCards, setEvidenceCards] = useState([]);
   const [evidenceQuery, setEvidenceQuery] = useState('');
   const [highlightCitation, setHighlightCitation] = useState(null);
 
-  // Show auth page if not logged in
-  if (!user) {
-    return <AuthPage onLogin={(u) => setUser(u)} />;
-  }
+  if (!user) return <AuthPage onLogin={(u) => setUser(u)} />;
 
   const activeSubject = subjects.find(s => s.id === activeSubjectId);
+
+  // Build notes context for voice chat
+  const voiceNotesContext = activeSubject?.notesChunks?.length
+      ? activeSubject.notesChunks.slice(0, 10).map(c => c.text).join('\n\n')
+      : null;
 
   return (
     <div className="layout-wrapper">
       <Sidebar
-        subjects={subjects}
-        activeSubjectId={activeSubjectId}
-        onSelect={setActiveSubjectId}
-        dispatch={dispatch}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        userName={user.name}
-        onLogout={() => setUser(null)}
+        subjects={subjects} activeSubjectId={activeSubjectId}
+        onSelect={setActiveSubjectId} dispatch={dispatch}
+        isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)}
+        userName={user.name} onLogout={() => setUser(null)}
       />
 
       <MainChat
-        subject={activeSubject}
-        dispatch={dispatch}
-        setEvidenceCards={setEvidenceCards}
-        setEvidenceQuery={setEvidenceQuery}
-        onCitationClick={(citation) => {
-          setHighlightCitation(citation);
-          setIsEvidenceOpen(true);
-        }}
+        subject={activeSubject} dispatch={dispatch}
+        setEvidenceCards={setEvidenceCards} setEvidenceQuery={setEvidenceQuery}
+        onCitationClick={(c) => { setHighlightCitation(c); setIsEvidenceOpen(true); }}
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onToggleEvidence={() => setIsEvidenceOpen(!isEvidenceOpen)}
         onOpenStudyMode={() => setIsStudyModeOpen(true)}
+        onOpenVoiceChat={() => setIsVoiceChatOpen(true)}
       />
 
       <EvidencePanel
-        chunks={evidenceCards}
-        query={evidenceQuery}
+        chunks={evidenceCards} query={evidenceQuery}
         highlightCitation={highlightCitation}
-        isOpen={isEvidenceOpen}
-        onClose={() => setIsEvidenceOpen(false)}
+        isOpen={isEvidenceOpen} onClose={() => setIsEvidenceOpen(false)}
       />
 
-      {isStudyModeOpen && (
-        <StudyMode
-          subject={activeSubject}
-          onClose={() => setIsStudyModeOpen(false)}
-        />
-      )}
+      {isStudyModeOpen && <StudyMode subject={activeSubject} onClose={() => setIsStudyModeOpen(false)} />}
+      {isVoiceChatOpen && <VoiceChat notesContext={voiceNotesContext} onClose={() => setIsVoiceChatOpen(false)} />}
 
-      {/* Mobile Bottom Navigation */}
       <div className="bottom-nav">
         <button onClick={() => { setIsSidebarOpen(true); setIsEvidenceOpen(false); }} style={{ flex: 1 }}>📚 Subjects</button>
         <button onClick={() => { setIsSidebarOpen(false); setIsEvidenceOpen(false); }} style={{ flex: 1 }}>💬 Chat</button>
-        <button onClick={() => { setIsEvidenceOpen(true); setIsSidebarOpen(false); }} style={{ flex: 1 }}>📖 Evidence</button>
+        <button onClick={() => setIsVoiceChatOpen(true)} style={{ flex: 1 }}>🎤 Voice</button>
         <button onClick={() => setIsStudyModeOpen(true)} style={{ flex: 1 }}>🎓 Study</button>
       </div>
     </div>

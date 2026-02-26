@@ -80,7 +80,7 @@ function AssistantMessage({ msg, accentColor, onCitationClick, isSpeaking, onSto
     );
 }
 
-export default function MainChat({ subject, dispatch, setEvidenceCards, setEvidenceQuery, onCitationClick, onToggleSidebar, onToggleEvidence, onOpenStudyMode }) {
+export default function MainChat({ subject, dispatch, setEvidenceCards, setEvidenceQuery, onCitationClick, onToggleSidebar, onToggleEvidence, onOpenStudyMode, onOpenVoiceChat }) {
     const [inputVal, setInputVal] = useState('');
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState('');
@@ -154,6 +154,11 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
                     {subject.notesChunks.length > 0 && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '2px 8px', borderRadius: '10px' }}>{subject.notesChunks.length} chunks</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button onClick={onOpenVoiceChat}
+                        style={{ padding: '6px 14px', borderRadius: '8px', background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', fontSize: '0.82rem', fontWeight: 600, color: '#00d4ff', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', gap: '4px', alignItems: 'center' }}
+                        onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0,212,255,0.2)'}
+                        onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0,212,255,0.1)'}
+                    >🎤 Voice</button>
                     <button onClick={onOpenStudyMode}
                         style={{ padding: '6px 14px', borderRadius: '8px', background: 'var(--accent-glow)', border: '1px solid var(--border-active)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent-light)', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', gap: '4px', alignItems: 'center' }}
                         onMouseOver={(e) => e.currentTarget.style.background = 'rgba(99,102,241,0.25)'}
