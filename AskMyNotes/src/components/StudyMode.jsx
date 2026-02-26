@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { generateStudyMaterials } from '../utils/anthropicApi';
+import { generateStudyMaterials } from '../utils/geminiApi';
 
 function Flashcard({ mcq }) {
     const [flipped, setFlipped] = useState(false);
@@ -14,7 +14,7 @@ function Flashcard({ mcq }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: 'auto' }}>
                         {['A', 'B', 'C', 'D'].map(opt => (
                             <div key={opt} style={{ padding: '0.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', fontSize: '0.9rem' }}>
-                                <strong style={{ opacity: 0.8 }}>{opt}.</strong> {mcq.options[opt]}
+                                <strong style={{ opacity: 0.8 }}>{opt}.</strong> {mcq.options?.[opt]}
                             </div>
                         ))}
                     </div>
@@ -78,7 +78,7 @@ export default function StudyMode({ subject, onClose }) {
         }
 
         try {
-            const result = await generateStudyMaterials(null, subject.name, first20Chunks);
+            const result = await generateStudyMaterials(subject.name, first20Chunks);
             setData(result);
         } catch (err) {
             setError(err.message);
@@ -90,7 +90,7 @@ export default function StudyMode({ subject, onClose }) {
     useEffect(() => {
         fetchMaterials();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Only on mount
+    }, []);
 
     return (
         <div className="modal-overlay open" style={{ padding: '1rem' }}>
@@ -99,7 +99,7 @@ export default function StudyMode({ subject, onClose }) {
                 <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-color)' }}>
                     <div>
                         <h2 style={{ fontSize: '1.5rem', margin: '0 0 0.25rem 0', color: subject.colorHex }}>Study Mode: {subject.name}</h2>
-                        <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.6 }}>Generated from the first 20 chunks of your notes.</p>
+                        <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.6 }}>Generated from your notes via Google Gemini AI</p>
                     </div>
                     <button onClick={onClose} style={{ fontSize: '1.75rem', lineHeight: 1, opacity: 0.6, padding: '4px 8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}>✕</button>
                 </div>

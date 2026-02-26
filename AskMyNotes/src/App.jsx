@@ -42,8 +42,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isStudyModeOpen, setIsStudyModeOpen] = useState(false);
 
-  // Evidence panel state
-  const [evidenceCards, setEvidenceCards] = useState([]); // top 6 chunks
+  const [evidenceCards, setEvidenceCards] = useState([]);
   const [evidenceQuery, setEvidenceQuery] = useState('');
   const [highlightCitation, setHighlightCitation] = useState(null);
 
@@ -61,7 +60,6 @@ function App() {
       />
 
       <MainChat
-        apiKey={''}
         subject={activeSubject}
         dispatch={dispatch}
         setEvidenceCards={setEvidenceCards}
@@ -85,7 +83,6 @@ function App() {
 
       {isStudyModeOpen && (
         <StudyMode
-          apiKey={''}
           subject={activeSubject}
           onClose={() => setIsStudyModeOpen(false)}
         />
@@ -93,10 +90,10 @@ function App() {
 
       {/* Mobile Bottom Navigation */}
       <div className="bottom-nav">
-        <button onClick={() => { setIsSidebarOpen(true); setIsEvidenceOpen(false); }} style={{ flex: 1 }}>Subjects</button>
-        <button onClick={() => { setIsSidebarOpen(false); setIsEvidenceOpen(false); }} style={{ flex: 1 }}>Chat</button>
-        <button onClick={() => { setIsEvidenceOpen(true); setIsSidebarOpen(false); }} style={{ flex: 1 }}>Evidence</button>
-        <button onClick={() => setIsStudyModeOpen(true)} style={{ flex: 1 }}>Study</button>
+        <button onClick={() => { setIsSidebarOpen(true); setIsEvidenceOpen(false); }} style={{ flex: 1 }}>📚 Subjects</button>
+        <button onClick={() => { setIsSidebarOpen(false); setIsEvidenceOpen(false); }} style={{ flex: 1 }}>💬 Chat</button>
+        <button onClick={() => { setIsEvidenceOpen(true); setIsSidebarOpen(false); }} style={{ flex: 1 }}>📖 Evidence</button>
+        <button onClick={() => setIsStudyModeOpen(true)} style={{ flex: 1 }}>🎓 Study</button>
       </div>
     </div>
   );

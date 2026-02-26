@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useVoice } from '../hooks/useVoice';
 import { retrieveChunks } from '../utils/retrieval';
-import { askClaude } from '../utils/anthropicApi';
+import { askGemini } from '../utils/geminiApi';
 
 function Toast({ message, onClose }) {
     useEffect(() => {
@@ -10,7 +10,7 @@ function Toast({ message, onClose }) {
     }, [onClose]);
 
     return (
-        <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', background: '#ef4444', color: 'white', padding: '12px 24px', borderRadius: '8px', zIndex: 9999, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', fontWeight: 'bold' }}>
+        <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', background: '#ef4444', color: 'white', padding: '12px 24px', borderRadius: '8px', zIndex: 9999, boxShadow: '0 4px 12px rgba(0,0,0,0.5)', fontWeight: 'bold', maxWidth: '90vw', textAlign: 'center' }}>
             {message}
         </div>
     );
@@ -154,7 +154,7 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
             if (insufficientContext) {
                 parsedInfo = { answer: 'NOT_FOUND', subjectName: subject.name };
             } else {
-                parsedInfo = await askClaude(null, subject.name, topChunks, subject.conversationHistory, question);
+                parsedInfo = await askGemini(subject.name, topChunks, subject.conversationHistory, question);
             }
 
             if (parsedInfo.answer === 'NOT_FOUND') {
@@ -191,7 +191,7 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
             {/* Top Header */}
             <div style={{ height: '70px', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', background: 'var(--surface-color)', zIndex: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <button onClick={onToggleSidebar} style={{ fontSize: '1.2rem', padding: '4px', display: window.innerWidth < 1024 ? 'block' : 'none' }}>☰</button>
+                    <button onClick={onToggleSidebar} className="responsive-toggle" style={{ fontSize: '1.2rem', padding: '4px' }}>☰</button>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: subject.colorHex, boxShadow: `0 0 12px ${subject.colorHex}90` }} />
                         <h1 style={{ fontSize: '1.3rem', margin: 0, fontWeight: 600, fontFamily: 'var(--font-display)', letterSpacing: '0.02em' }}>{subject.name}</h1>
@@ -206,7 +206,7 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
                     >
                         <span style={{ color: subject.colorHex }}>★</span> Study Mode
                     </button>
-                    <button onClick={onToggleEvidence} style={{ fontSize: '1.2rem', padding: '4px', display: window.innerWidth < 1024 ? 'block' : 'none' }}>📖</button>
+                    <button onClick={onToggleEvidence} className="responsive-toggle" style={{ fontSize: '1.2rem', padding: '4px' }}>📖</button>
                 </div>
             </div>
 
@@ -215,7 +215,8 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
                 {subject.conversationHistory.length === 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
                         <div style={{ fontSize: '4rem', marginBottom: '1.5rem', filter: 'grayscale(1)', opacity: 0.5 }}>📚</div>
-                        <p style={{ fontSize: '1.1rem' }}>Ask a question regarding your notes in {subject.name}</p>
+                        <p style={{ fontSize: '1.1rem', textAlign: 'center' }}>Upload notes in the sidebar, then ask a question about <strong>{subject.name}</strong></p>
+                        <p style={{ fontSize: '0.85rem', marginTop: '0.5rem', opacity: 0.7 }}>Powered by Google Gemini AI</p>
                     </div>
                 ) : (
                     subject.conversationHistory.map((msg, i) => {
