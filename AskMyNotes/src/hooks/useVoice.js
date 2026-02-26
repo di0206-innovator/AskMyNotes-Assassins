@@ -49,24 +49,32 @@ export function useVoice({ onSpeechResult, onError }) {
         recognition.start();
     }, [onSpeechResult, onError, synth]);
 
-    const speak = useCallback((text) => {
+    const speak = useCallback((text, targetLanguage = 'English') => {
         if (!synth) return;
         synth.cancel();
 
         const cleanText = stripMarkdown(text);
         if (!cleanText) return;
 
+        const langMap = {
+            'English': 'en-US',
+            'Hindi': 'hi-IN',
+            'Marathi': 'mr-IN',
+            'Gujarati': 'gu-IN',
+            'Telugu': 'te-IN',
+            'Punjabi': 'pa-IN',
+            'Bengali': 'bn-IN'
+        };
+        const langCode = langMap[targetLanguage] || 'en-US';
+
         const utterance = new SpeechSynthesisUtterance(cleanText);
-        utterance.lang = 'en-US';
+        utterance.lang = langCode;
         utterance.rate = 0.95; // teacher-like rate
         utterance.pitch = 1.05; // teacher-like pitch
 
-        // Best effort try to pick a good English voice if loaded
         const voices = synth.getVoices();
-        const enVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Samantha')));
-        if (enVoice) {
-            utterance.voice = enVoice;
-        }
+        const preferredVoice = voices.find(v => v.lang.startsWith(langCode.split('-')[0]));
+        if (preferredVoice) utterance.voice = preferredVoice;
 
         utterance.onstart = () => setIsSpeaking(true);
         utterance.onend = () => setIsSpeaking(false);

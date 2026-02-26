@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Send, Mic, MicOff, Menu, BookOpen, PanelRightOpen, GraduationCap, Volume2, VolumeX, MessageCircle, Sparkles, Network, ClipboardList, Waves } from 'lucide-react';
 import { useVoice } from '../hooks/useVoice';
 import { retrieveChunks } from '../utils/retrieval';
 import { askAI } from '../utils/geminiApi';
@@ -6,14 +8,27 @@ import { askAI } from '../utils/geminiApi';
 function Toast({ message, onClose }) {
     useEffect(() => { const t = setTimeout(onClose, 5000); return () => clearTimeout(t); }, [onClose]);
     return (
-        <div style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', background: 'var(--bg-elevated)', color: 'var(--error)', padding: '12px 24px', borderRadius: '12px', zIndex: 9999, boxShadow: 'var(--shadow-lg)', border: '1px solid rgba(248,113,113,0.3)', fontSize: '0.9rem', maxWidth: '90vw', textAlign: 'center', backdropFilter: 'blur(10px)' }}>
+        <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            style={{
+                position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+                background: 'var(--bg-elevated)', color: 'var(--error)',
+                padding: '12px 24px', borderRadius: 'var(--radius)', zIndex: 9999,
+                boxShadow: 'var(--shadow-lg)', border: '1px solid rgba(248,113,113,0.3)',
+                fontSize: '0.88rem', maxWidth: '90vw', textAlign: 'center',
+                backdropFilter: 'blur(12px)',
+            }}
+        >
             {message}
-        </div>
+        </motion.div>
     );
 }
 
-function AssistantMessage({ msg, accentColor, onCitationClick, isSpeaking, onStopSpeech }) {
+function AssistantMessage({ msg, accentColor, isSpeaking, onStopSpeech, index }) {
     const [showEvidence, setShowEvidence] = useState(false);
+    const [expandedCitation, setExpandedCitation] = useState(null);
     const contentRef = useRef(null);
 
     useEffect(() => {
@@ -24,38 +39,66 @@ function AssistantMessage({ msg, accentColor, onCitationClick, isSpeaking, onSto
         }
     }, [msg]);
 
-    const badgeColor = msg.confidence === 'High' ? 'var(--success)' : msg.confidence === 'Medium' ? 'var(--warning)' : 'var(--error)';
+    const badgeClass = msg.confidence === 'High' ? 'badge-success' : msg.confidence === 'Medium' ? 'badge-warning' : 'badge-error';
 
     return (
-        <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '1.25rem' }}>
-            <div style={{ maxWidth: '85%', padding: '1.25rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '16px', borderBottomLeftRadius: '4px' }}>
+        <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.35, delay: 0.05 }}
+            style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '1.25rem' }}
+        >
+            <div style={{
+                maxWidth: '85%', padding: '1.25rem',
+                background: 'var(--bg-glass)', backdropFilter: 'blur(16px)',
+                border: '1px solid var(--glass-border)', borderRadius: '18px', borderBottomLeftRadius: '4px',
+                boxShadow: 'var(--shadow-sm)',
+            }}>
                 {msg.confidence && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 600, padding: '3px 10px', borderRadius: '20px', border: `1px solid ${badgeColor}`, color: badgeColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                            {msg.confidence}
-                        </span>
+                        <span className={`badge ${badgeClass}`}>{msg.confidence}</span>
                         {isSpeaking && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <div className="waveform-bars"><div /><div /><div /><div /><div /></div>
-                                <button onClick={onStopSpeech} style={{ fontSize: '0.75rem', opacity: 0.7, cursor: 'pointer', background: 'none', border: 'none', color: 'inherit' }}>⏹</button>
+                                <button onClick={onStopSpeech} className="btn-ghost" style={{ padding: '2px 6px' }}>
+                                    <VolumeX size={14} />
+                                </button>
                             </div>
                         )}
                     </div>
                 )}
 
-                <div ref={contentRef} className="markdown-body" style={{ fontSize: '0.92rem', lineHeight: 1.65, color: 'var(--text-primary)' }} />
+                <div ref={contentRef} className="markdown-body" style={{ fontSize: '0.92rem', lineHeight: 1.7, color: 'var(--text-primary)' }} />
 
                 {msg.citations?.length > 0 && (
                     <div style={{ marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sources</div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {msg.citations.map((cit, i) => (
-                                <button key={i} onClick={() => onCitationClick(cit)}
-                                    style={{ background: 'var(--accent-glow)', border: '1px solid var(--border-active)', padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem', color: 'var(--accent-light)', cursor: 'pointer', transition: 'all 0.2s' }}
-                                    onMouseOver={(e) => e.currentTarget.style.background = 'rgba(99,102,241,0.25)'}
-                                    onMouseOut={(e) => e.currentTarget.style.background = 'var(--accent-glow)'}
-                                >{cit.fileName} p.{cit.pageNumber}</button>
-                            ))}
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>Sources</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {msg.citations.map((cit, i) => (
+                                    <motion.button key={i}
+                                        onClick={() => setExpandedCitation(expandedCitation === i ? null : i)}
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        className="badge badge-accent"
+                                        style={{ cursor: 'pointer', fontSize: '0.72rem', background: expandedCitation === i ? 'var(--accent)' : '' }}
+                                    >
+                                        {cit.fileName} p.{cit.pageNumber}
+                                    </motion.button>
+                                ))}
+                            </div>
+                            <AnimatePresence>
+                                {expandedCitation !== null && msg.citations[expandedCitation] && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        style={{ overflow: 'hidden', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-secondary)', borderLeft: '2px solid var(--accent)' }}
+                                    >
+                                        "{msg.citations[expandedCitation].excerpt}"
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
                 )}
@@ -63,29 +106,38 @@ function AssistantMessage({ msg, accentColor, onCitationClick, isSpeaking, onSto
                 {msg.evidenceSnippets?.length > 0 && (
                     <div style={{ marginTop: '1rem' }}>
                         <button onClick={() => setShowEvidence(!showEvidence)}
-                            style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                            <span style={{ fontSize: '0.6rem', transition: 'transform 0.2s', transform: showEvidence ? 'rotate(90deg)' : '' }}>▶</span> Evidence
+                            style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-sans)' }}>
+                            <motion.span animate={{ rotate: showEvidence ? 90 : 0 }} style={{ fontSize: '0.6rem', display: 'inline-block' }}>▶</motion.span>
+                            Evidence snippets
                         </button>
-                        {showEvidence && (
-                            <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--bg-primary)', borderRadius: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontFamily: 'var(--font-mono)' }}>
-                                {msg.evidenceSnippets.map((snip, i) => (
-                                    <div key={i} style={{ borderLeft: '2px solid var(--accent)', paddingLeft: '10px' }}>"{snip}"</div>
-                                ))}
-                            </div>
-                        )}
+                        <AnimatePresence>
+                            {showEvidence && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    style={{ overflow: 'hidden', marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontFamily: 'var(--font-mono)' }}
+                                >
+                                    {msg.evidenceSnippets.map((snip, i) => (
+                                        <div key={i} style={{ borderLeft: '2px solid var(--accent)', paddingLeft: '10px' }}>"{snip}"</div>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 )}
             </div>
-        </div>
+        </motion.div>
     );
 }
 
-export default function MainChat({ subject, dispatch, setEvidenceCards, setEvidenceQuery, onCitationClick, onToggleSidebar, onToggleEvidence, onOpenStudyMode, onOpenVoiceChat }) {
+export default function MainChat({ subject, dispatch, setEvidenceCards, setEvidenceQuery, onCitationClick, onToggleSidebar, onToggleEvidence, onOpenStudyMode, onOpenVoiceChat, onOpenMindMap, onOpenExamMode, onOpenLiveLecture }) {
     const [inputVal, setInputVal] = useState('');
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState('');
     const [speakingIdx, setSpeakingIdx] = useState(-1);
     const messagesEndRef = useRef(null);
+    const textareaRef = useRef(null);
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 
@@ -118,14 +170,14 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
             const updatedHistory = [...subject.conversationHistory, { role: 'user', content: question }];
             dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: updatedHistory });
 
-            const parsedInfo = await askAI(subject.name, topChunks, subject.conversationHistory, question);
+            const parsedInfo = await askAI(subject.name, topChunks, subject.conversationHistory, question, settings.language);
             if (parsedInfo.answer === 'NOT_FOUND') parsedInfo.subjectName = subject.name;
 
             const finalHistory = [...updatedHistory, { role: 'assistant', content: parsedInfo.answer, parsed: parsedInfo }];
             dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: finalHistory });
 
             if (parsedInfo.answer !== 'NOT_FOUND') {
-                speak(parsedInfo.answer);
+                if (settings.ttsEnabled) speak(parsedInfo.answer, settings.language);
                 setSpeakingIdx(finalHistory.length - 1);
             }
         } catch (err) {
@@ -143,81 +195,201 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
 
     return (
         <div className="main-chat-area">
-            {toast && <Toast message={toast} onClose={() => setToast('')} />}
+            <AnimatePresence>{toast && <Toast message={toast} onClose={() => setToast('')} />}</AnimatePresence>
 
             {/* Header */}
-            <div style={{ height: '64px', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+            <div style={{
+                height: '64px', padding: '0 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                borderBottom: '1px solid var(--border)', background: 'var(--bg-glass)',
+                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+            }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button onClick={onToggleSidebar} className="responsive-toggle" style={{ fontSize: '1.1rem', padding: '4px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>☰</button>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: subject.colorHex, boxShadow: `0 0 8px ${subject.colorHex}` }} />
-                    <h1 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>{subject.name}</h1>
-                    {subject.notesChunks.length > 0 && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '2px 8px', borderRadius: '10px' }}>{subject.notesChunks.length} chunks</span>}
+                    <button onClick={onToggleSidebar} className="responsive-toggle btn-ghost" style={{ padding: '6px' }}>
+                        <Menu size={18} />
+                    </button>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: subject.colorHex, boxShadow: `0 0 10px ${subject.colorHex}` }} />
+                    <h1 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0 }}>{subject.name}</h1>
+                    {subject.notesChunks.length > 0 && (
+                        <span className="badge badge-accent">{subject.notesChunks.length} chunks</span>
+                    )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <button onClick={onOpenVoiceChat}
-                        style={{ padding: '6px 14px', borderRadius: '8px', background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', fontSize: '0.82rem', fontWeight: 600, color: '#00d4ff', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', gap: '4px', alignItems: 'center' }}
-                        onMouseOver={(e) => e.currentTarget.style.background = 'rgba(0,212,255,0.2)'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'rgba(0,212,255,0.1)'}
-                    >🎤 Voice</button>
-                    <button onClick={onOpenStudyMode}
-                        style={{ padding: '6px 14px', borderRadius: '8px', background: 'var(--accent-glow)', border: '1px solid var(--border-active)', fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent-light)', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', gap: '4px', alignItems: 'center' }}
-                        onMouseOver={(e) => e.currentTarget.style.background = 'rgba(99,102,241,0.25)'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'var(--accent-glow)'}
-                    >🎓 Study</button>
-                    <button onClick={onToggleEvidence} className="responsive-toggle" style={{ fontSize: '1.1rem', padding: '4px', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>📖</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={onOpenStudyMode}
+                        className="btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent-light)' }}
+                    >
+                        <GraduationCap size={14} /> Study
+                    </motion.button>
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={onOpenMindMap}
+                        className="btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--brand-primary)' }}
+                    >
+                        <Network size={14} /> Map
+                    </motion.button>
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={onOpenExamMode}
+                        className="btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: '#f59e0b' }}
+                    >
+                        <ClipboardList size={14} /> Exam
+                    </motion.button>
+                    <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={onOpenLiveLecture}
+                        className="btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: '#ec4899' }}
+                    >
+                        <Waves size={14} /> Live
+                    </motion.button>
                 </div>
             </div>
 
             {/* Messages */}
             <div className="scroll-y" style={{ flex: 1, padding: '1.5rem' }}>
                 {subject.conversationHistory.length === 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
-                        <div style={{ fontSize: '3.5rem', marginBottom: '1.5rem', opacity: 0.3 }}>📚</div>
-                        <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Upload notes and ask questions about <strong style={{ color: 'var(--text-primary)' }}>{subject.name}</strong></p>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Supports PDF and TXT files</p>
-                    </div>
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5 }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}
+                    >
+                        <motion.div
+                            animate={{ y: [0, -8, 0] }}
+                            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                            style={{
+                                width: '80px', height: '80px', borderRadius: '20px',
+                                background: 'var(--accent-gradient)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                marginBottom: '1.5rem', boxShadow: 'var(--shadow-glow-lg)',
+                            }}
+                        >
+                            <MessageCircle size={36} color="#fff" />
+                        </motion.div>
+                        <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                            Upload notes and ask questions about <strong style={{ color: 'var(--text-primary)' }}>{subject.name}</strong>
+                        </p>
+                        <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <Sparkles size={12} /> Supports PDF and TXT files
+                        </p>
+                    </motion.div>
                 ) : (
                     subject.conversationHistory.map((msg, i) => (
                         msg.role === 'user' ? (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}>
-                                <div style={{ maxWidth: '80%', padding: '0.85rem 1.1rem', background: 'var(--accent-gradient)', color: '#fff', borderRadius: '16px', borderBottomRightRadius: '4px', fontSize: '0.92rem', lineHeight: 1.5, boxShadow: '0 2px 8px rgba(99,102,241,0.25)' }}>
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.3 }}
+                                style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.25rem' }}
+                            >
+                                <div style={{
+                                    maxWidth: '80%', padding: '0.9rem 1.15rem',
+                                    background: 'var(--accent-gradient)', color: '#fff',
+                                    borderRadius: '18px', borderBottomRightRadius: '4px',
+                                    fontSize: '0.92rem', lineHeight: 1.55,
+                                    boxShadow: '0 4px 15px rgba(99,102,241,0.3)',
+                                }}>
                                     {msg.content}
                                 </div>
-                            </div>
+                            </motion.div>
                         ) : (
                             <AssistantMessage key={i} msg={msg.parsed || { answer: msg.content }} accentColor={subject.colorHex}
-                                onCitationClick={onCitationClick} isSpeaking={isSpeaking && speakingIdx === i} onStopSpeech={stopSpeaking} />
+                                isSpeaking={isSpeaking && speakingIdx === i} onStopSpeech={stopSpeaking} index={i} />
                         )
                     ))
                 )}
                 {loading && (
-                    <div style={{ display: 'flex', marginBottom: '1.25rem' }}>
-                        <div style={{ padding: '1rem 1.5rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: '16px', borderBottomLeftRadius: '4px' }}>
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        style={{ display: 'flex', marginBottom: '1.25rem' }}
+                    >
+                        <div style={{
+                            padding: '1.25rem 1.75rem',
+                            background: 'var(--bg-glass)', backdropFilter: 'blur(16px)',
+                            border: '1px solid var(--glass-border)', borderRadius: '18px', borderBottomLeftRadius: '4px',
+                        }}>
                             <div className="typing-dots"><span /><span /><span /></div>
                         </div>
-                    </div>
+                    </motion.div>
                 )}
                 <div ref={messagesEndRef} style={{ height: '16px' }} />
             </div>
 
             {/* Input */}
-            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border)', background: 'var(--bg-glass)', backdropFilter: 'blur(16px)' }}>
                 <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', maxWidth: '860px', margin: '0 auto' }}>
                     <div style={{ position: 'relative', flex: 1 }}>
-                        <textarea value={inputVal} onChange={(e) => setInputVal(e.target.value)}
+                        <textarea
+                            ref={textareaRef}
+                            value={inputVal}
+                            onChange={(e) => setInputVal(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
                             placeholder={`Ask about ${subject.name}...`}
-                            style={{ width: '100%', background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: '14px', padding: '14px 50px 14px 18px', resize: 'none', height: '50px', fontSize: '0.92rem', lineHeight: '1.5', outline: 'none', transition: 'border-color 0.2s', fontFamily: 'var(--font-sans)', color: 'var(--text-primary)' }}
-                            onFocus={(e) => e.target.style.borderColor = 'var(--accent)'}
-                            onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+                            className="input-field"
+                            style={{
+                                resize: 'none', height: '52px',
+                                paddingRight: '50px', paddingTop: '14px', paddingBottom: '14px',
+                                borderRadius: 'var(--radius-lg)',
+                            }}
                         />
-                        <button type="button" onClick={startListening} className={isListening ? 'mic-pulsing' : ''}
-                            style={{ position: 'absolute', right: '6px', bottom: '6px', width: '36px', height: '36px', borderRadius: '50%', background: isListening ? 'var(--error)' : 'var(--bg-elevated)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', color: '#fff', cursor: 'pointer', transition: 'all 0.2s' }}
-                        >🎤</button>
+                        <motion.button
+                            type="button"
+                            onClick={startListening}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            className={isListening ? 'mic-pulsing' : ''}
+                            style={{
+                                position: 'absolute', right: '8px', bottom: '8px',
+                                width: '36px', height: '36px', borderRadius: '50%',
+                                background: isListening ? 'var(--error)' : 'var(--bg-elevated)',
+                                border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                color: isListening ? '#fff' : 'var(--text-secondary)', cursor: 'pointer',
+                            }}
+                        >
+                            {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+                        </motion.button>
                     </div>
-                    <button type="submit" disabled={!inputVal.trim() || loading}
-                        style={{ height: '50px', width: '50px', borderRadius: '14px', background: inputVal.trim() ? 'var(--accent-gradient)' : 'var(--bg-elevated)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: inputVal.trim() && !loading ? 'pointer' : 'default', transition: 'all 0.2s', flexShrink: 0, opacity: inputVal.trim() ? 1 : 0.4 }}
-                    >➤</button>
+                    <motion.button
+                        type="button"
+                        onClick={onOpenVoiceChat}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        style={{
+                            height: '52px', padding: '0 1rem', borderRadius: 'var(--radius-lg)',
+                            background: 'var(--bg-elevated)', color: 'var(--success)', border: '1px solid var(--border)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                            cursor: 'pointer', flexShrink: 0, fontWeight: 600, fontSize: '0.9rem'
+                        }}
+                    >
+                        <Mic size={18} /> Go Live
+                    </motion.button>
+                    <motion.button
+                        type="submit"
+                        disabled={!inputVal.trim() || loading}
+                        whileHover={{ scale: inputVal.trim() ? 1.05 : 1 }}
+                        whileTap={{ scale: 0.95 }}
+                        style={{
+                            height: '52px', width: '52px', borderRadius: 'var(--radius-lg)',
+                            background: inputVal.trim() ? 'var(--accent-gradient)' : 'var(--bg-elevated)',
+                            color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: inputVal.trim() && !loading ? 'pointer' : 'default',
+                            flexShrink: 0, opacity: inputVal.trim() ? 1 : 0.4,
+                            boxShadow: inputVal.trim() ? '0 4px 15px rgba(99,102,241,0.3)' : 'none',
+                            transition: 'all 0.25s',
+                        }}
+                    >
+                        <Send size={18} />
+                    </motion.button>
                 </form>
             </div>
         </div>

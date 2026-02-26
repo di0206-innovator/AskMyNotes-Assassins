@@ -1,0 +1,196 @@
+/* MindMapPanel.css */
+.mindmap-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(6, 9, 15, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 2000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+}
+
+.mindmap-modal-content {
+    background: rgba(15, 17, 26, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    width: 100%;
+    max-width: 1200px;
+    height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.mindmap-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.mindmap-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mindmap-title h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.mindmap-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.mindmap-body {
+    flex: 1;
+    position: relative;
+    background: #ffffff;
+    /* xyflow works best with light background initially, or we map styles */
+    /* Wait, we are in dark mode, let's override xyflow default colors */
+}
+
+/* React Flow Dark Mode Overrides */
+.react-flow-wrapper {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-primary);
+    /* Use our dark bg */
+}
+
+.react-flow__background {
+    background-color: var(--bg-primary) !important;
+}
+
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output {
+    background: var(--bg-secondary) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--text-primary) !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 0.9rem !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    transition: all 0.2s;
+}
+
+.mindmap-node:hover {
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3) !important;
+}
+
+.mindmap-node.root-node {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)) !important;
+    color: white !important;
+    font-weight: 700 !important;
+    border: none !important;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4) !important;
+}
+
+.react-flow__handle {
+    background: var(--text-secondary) !important;
+}
+
+.react-flow__edge-path {
+    stroke: rgba(255, 255, 255, 0.2) !important;
+}
+
+.react-flow__controls {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: var(--bg-secondary) !important;
+}
+
+.react-flow__controls-button {
+    background: var(--bg-secondary) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: var(--text-primary) !important;
+}
+
+.react-flow__controls-button:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.react-flow__controls-button svg {
+    fill: var(--text-primary) !important;
+}
+
+/* Loading & Empty States */
+.mindmap-loading,
+.mindmap-error,
+.mindmap-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    background: var(--bg-primary);
+    z-index: 10;
+}
+
+.mindmap-loading p,
+.mindmap-error p,
+.mindmap-empty p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.mindmap-error {
+    color: #ef4444;
+}
+
+.mindmap-error p {
+    color: #ef4444;
+}
+
+/* Spinner */
+.orb-scanner {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-primary), transparent 70%);
+    animation: scan 2s ease-in-out infinite alternate;
+    box-shadow: 0 0 30px var(--accent-primary);
+}
+
+@keyframes scan {
+    0% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+
+    100% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+.mindmap-panel-info {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    padding: 8px 16px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin: 16px;
+}
