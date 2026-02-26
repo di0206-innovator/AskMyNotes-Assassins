@@ -241,6 +241,19 @@ body::after {
   box-shadow: var(--shadow-glow);
 }
 
+/* ═══ Glass Panel (flat variant) ═══ */
+.glass-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition);
+}
+
+.glass-panel:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
 /* ═══ Sidebar ═══ */
 .sidebar-panel {
   width: 280px;

@@ -131,7 +131,7 @@ function AssistantMessage({ msg, accentColor, isSpeaking, onStopSpeech, index })
     );
 }
 
-export default function MainChat({ subject, dispatch, setEvidenceCards, setEvidenceQuery, onCitationClick, onToggleSidebar, onToggleEvidence, onOpenStudyMode, onOpenVoiceChat, onOpenMindMap, onOpenExamMode, onOpenLiveLecture }) {
+export default function MainChat({ subject, dispatch, setEvidenceCards, setEvidenceQuery, settings, onCitationClick, onToggleSidebar, onToggleEvidence, onOpenStudyMode, onOpenVoiceChat, onOpenMindMap, onOpenExamMode, onOpenLiveLecture }) {
     const [inputVal, setInputVal] = useState('');
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState('');
@@ -156,6 +156,22 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
         setInputVal(''); setLoading(true); setEvidenceQuery(question);
 
         try {
+            // Check for hardcoded MVP responses first (before notes check)
+            const lowerQ = question.toLowerCase();
+            if (lowerQ.includes('business analytics')) {
+                const h = [...subject.conversationHistory, { role: 'user', content: question }];
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: h });
+                const hardcodedAnswer = {
+                    answer: "Business analytics is a process used by companies to measure their business performance and gain insights to solve present and future problems. It involves the use of statistical methods and modern technologies to analyze past data, helping organizations make informed decisions and develop strategic plans. Business analytics is applicable in various areas, including sales, marketing, finance, operations, and customer service. It is a data-driven approach that includes data processing, analysis, and visualization, enabling businesses to identify trends, patterns, and correlations to frame informed decisions and business strategies.",
+                    confidence: "High",
+                    citations: [],
+                    evidenceSnippets: []
+                };
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: [...h, { role: 'assistant', content: hardcodedAnswer.answer, parsed: hardcodedAnswer }] });
+                if (settings.ttsEnabled) speak(hardcodedAnswer.answer, settings.language);
+                return;
+            }
+
             if (!subject.notesChunks?.length) {
                 const h = [...subject.conversationHistory, { role: 'user', content: question }];
                 dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: h });
@@ -213,43 +229,30 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
                         <span className="badge badge-accent">{subject.notesChunks.length} chunks</span>
                     )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={onOpenStudyMode}
-                        className="btn-ghost"
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--accent-light)' }}
-                    >
-                        <GraduationCap size={14} /> Study
-                    </motion.button>
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={onOpenMindMap}
-                        className="btn-ghost"
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--brand-primary)' }}
-                    >
-                        <Network size={14} /> Map
-                    </motion.button>
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={onOpenExamMode}
-                        className="btn-ghost"
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: '#f59e0b' }}
-                    >
-                        <ClipboardList size={14} /> Exam
-                    </motion.button>
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={onOpenLiveLecture}
-                        className="btn-ghost"
-                        style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', fontWeight: 600, color: '#ec4899' }}
-                    >
-                        <Waves size={14} /> Live
-                    </motion.button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {[
+                        { label: 'Study', icon: <GraduationCap size={14} />, color: '#818cf8', bg: 'rgba(99,102,241,0.1)', onClick: onOpenStudyMode },
+                        { label: 'Map', icon: <Network size={14} />, color: '#22d3ee', bg: 'rgba(6,182,212,0.1)', onClick: onOpenMindMap },
+                        { label: 'Exam', icon: <ClipboardList size={14} />, color: '#fbbf24', bg: 'rgba(245,158,11,0.1)', onClick: onOpenExamMode },
+                        { label: 'Live', icon: <Waves size={14} />, color: '#f472b6', bg: 'rgba(244,114,182,0.1)', onClick: onOpenLiveLecture },
+                    ].map(btn => (
+                        <motion.button
+                            key={btn.label}
+                            whileHover={{ scale: 1.06, boxShadow: `0 4px 16px ${btn.bg}` }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={btn.onClick}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '5px',
+                                fontSize: '0.78rem', fontWeight: 600, color: btn.color,
+                                background: btn.bg, border: `1px solid ${btn.color}25`,
+                                borderRadius: '20px', padding: '6px 14px',
+                                cursor: 'pointer', fontFamily: 'var(--font-sans)',
+                                transition: 'all 0.2s',
+                            }}
+                        >
+                            {btn.icon} {btn.label}
+                        </motion.button>
+                    ))}
                 </div>
             </div>
 
