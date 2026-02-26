@@ -5,7 +5,6 @@ import { parseTxt } from '../utils/txtParser';
 function EditableName({ name, onSave }) {
     const [isEditing, setIsEditing] = useState(false);
     const [tempName, setTempName] = useState(name);
-    const inputRef = useRef(null);
 
     const finishEdit = () => {
         setIsEditing(false);
@@ -19,26 +18,17 @@ function EditableName({ name, onSave }) {
     if (isEditing) {
         return (
             <input
-                ref={inputRef}
                 value={tempName}
                 onChange={(e) => setTempName(e.target.value)}
                 onBlur={finishEdit}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter') finishEdit();
-                    if (e.key === 'Escape') {
-                        setIsEditing(false);
-                        setTempName(name);
-                    }
+                    if (e.key === 'Escape') { setIsEditing(false); setTempName(name); }
                 }}
                 autoFocus
                 style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'inherit',
-                    width: '100%',
-                    padding: '2px 4px',
-                    borderRadius: '4px',
-                    outline: 'none'
+                    background: 'rgba(255,255,255,0.1)', border: '1px solid var(--border-subtle)',
+                    color: 'inherit', width: '100%', padding: '2px 4px', borderRadius: '4px', outline: 'none'
                 }}
                 onClick={(e) => e.stopPropagation()}
             />
@@ -58,18 +48,23 @@ function EditableName({ name, onSave }) {
 
 export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch, isOpen, onClose }) {
     const [parsingFiles, setParsingFiles] = useState({});
+    const fileInputRefs = useRef({});
 
-    const handleFileUpload = async (subjectId, files) => {
+    const handleFileUpload = async (subjectId, fileList) => {
+        const files = Array.from(fileList);
         for (const file of files) {
-            const fileKey = `${subjectId}_${file.name}`;
-            if (!file.name.endsWith('.pdf') && !file.name.endsWith('.txt')) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext !== 'pdf' && ext !== 'txt') {
+                console.warn('Skipping non-pdf/txt file:', file.name);
                 continue;
             }
 
+            const fileKey = `${subjectId}_${file.name}`;
             setParsingFiles(prev => ({ ...prev, [fileKey]: 'loading' }));
+
             try {
                 let chunks = [];
-                if (file.name.endsWith('.pdf')) {
+                if (ext === 'pdf') {
                     chunks = await parsePdf(file);
                 } else {
                     chunks = await parseTxt(file);
@@ -78,8 +73,9 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
                 dispatch({ type: 'ADD_FILE', subjectId, file: { name: file.name, size: file.size } });
                 dispatch({ type: 'ADD_CHUNKS', subjectId, chunks });
                 setParsingFiles(prev => ({ ...prev, [fileKey]: 'done' }));
+                console.log(`Parsed ${file.name}: ${chunks.length} chunks`);
             } catch (err) {
-                console.error("Failed to parse file", file.name, err);
+                console.error('Parse error for', file.name, ':', err);
                 setParsingFiles(prev => ({ ...prev, [fileKey]: 'error' }));
             }
         }
@@ -89,9 +85,7 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
         <div className={`sidebar-panel ${isOpen ? 'open' : ''}`}>
             <div style={{ padding: '1.25rem 1rem', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ fontSize: '1.2rem', margin: 0, letterSpacing: '0.05em' }}>AskMyNotes</h2>
-                <button onClick={onClose} style={{ display: 'none', background: 'var(--surface-color)', padding: '4px 8px', borderRadius: '4px' }} className="mobile-close-btn">
-                    ✕
-                </button>
+                <button onClick={onClose} className="responsive-toggle" style={{ background: 'var(--surface-color)', padding: '4px 8px', borderRadius: '4px' }}>✕</button>
             </div>
 
             <div className="scroll-y" style={{ flex: 1, padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -101,15 +95,13 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
 
                 {subjects.map(subject => {
                     const isActive = subject.id === activeSubjectId;
-
                     return (
                         <div
                             key={subject.id}
                             className="card"
                             onClick={() => onSelect(subject.id)}
                             style={{
-                                padding: '0.75rem',
-                                cursor: 'pointer',
+                                padding: '0.75rem', cursor: 'pointer',
                                 borderLeft: isActive ? `4px solid ${subject.colorHex}` : '1px solid var(--border-subtle)',
                                 backgroundColor: isActive ? 'rgba(255,255,255,0.05)' : 'transparent',
                                 transition: 'all var(--transition)'
@@ -121,34 +113,36 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
                                     name={subject.name}
                                     onSave={(newName) => dispatch({ type: 'RENAME_SUBJECT', id: subject.id, name: newName })}
                                 />
+                                {isActive && subject.notesChunks.length > 0 && (
+                                    <span style={{ fontSize: '0.65rem', opacity: 0.5, flexShrink: 0 }}>
+                                        {subject.notesChunks.length} chunks
+                                    </span>
+                                )}
                             </div>
 
                             {isActive && (
                                 <div style={{ marginTop: '0.5rem' }} onClick={(e) => e.stopPropagation()}>
                                     <label
                                         style={{
-                                            display: 'block',
-                                            padding: '0.6rem',
-                                            textAlign: 'center',
-                                            border: '1px dashed rgba(255,255,255,0.2)',
-                                            borderRadius: '4px',
-                                            cursor: 'pointer',
-                                            fontSize: '0.8rem',
-                                            opacity: 0.8,
-                                            transition: 'background 0.2s',
+                                            display: 'block', padding: '0.6rem', textAlign: 'center',
+                                            border: '1px dashed rgba(255,255,255,0.2)', borderRadius: '4px',
+                                            cursor: 'pointer', fontSize: '0.8rem', opacity: 0.8, transition: 'background 0.2s',
                                         }}
                                         onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                                         onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                                     >
-                                        <span>+ Add .pdf or .txt</span>
+                                        <span>📄 Add .pdf or .txt files</span>
                                         <input
                                             type="file"
                                             accept=".pdf,.txt"
                                             multiple
                                             style={{ display: 'none' }}
+                                            ref={el => fileInputRefs.current[subject.id] = el}
                                             onChange={(e) => {
-                                                handleFileUpload(subject.id, Array.from(e.target.files));
-                                                e.target.value = null; // reset
+                                                if (e.target.files && e.target.files.length > 0) {
+                                                    handleFileUpload(subject.id, e.target.files);
+                                                }
+                                                e.target.value = '';
                                             }}
                                         />
                                     </label>
@@ -158,7 +152,6 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
                                             {subject.files.map(f => {
                                                 const fk = `${subject.id}_${f.name}`;
                                                 const status = parsingFiles[fk] || 'done';
-
                                                 return (
                                                     <div key={f.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', padding: '6px 8px', background: 'rgba(0,0,0,0.4)', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
                                                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px', fontFamily: 'var(--font-mono)' }} title={f.name}>
@@ -169,15 +162,10 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
                                                             {status === 'done' && <span style={{ color: '#4ade80', fontWeight: 'bold' }}>✓</span>}
                                                             {status === 'error' && <span style={{ color: '#ef4444', fontWeight: 'bold' }} title="Parse failed">⚠</span>}
                                                             <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    dispatch({ type: 'REMOVE_FILE', subjectId: subject.id, fileName: f.name });
-                                                                }}
+                                                                onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_FILE', subjectId: subject.id, fileName: f.name }); }}
                                                                 style={{ opacity: 0.6, fontSize: '1rem', lineHeight: '1', padding: '0 2px' }}
                                                                 title="Remove file"
-                                                            >
-                                                                ×
-                                                            </button>
+                                                            >×</button>
                                                         </div>
                                                     </div>
                                                 );

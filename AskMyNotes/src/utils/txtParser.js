@@ -6,13 +6,17 @@ export async function parseTxt(file) {
         reader.onload = (e) => {
             try {
                 const text = e.target.result;
+                if (!text || !text.trim()) {
+                    reject(new Error('Text file is empty.'));
+                    return;
+                }
                 const textChunks = chunkText(text);
                 const allChunks = [];
                 let globalChunkIndex = 0;
                 for (const chunk of textChunks) {
                     allChunks.push({
                         fileName: file.name,
-                        pageNumber: 1, // TXT has no pages, fallback to 1
+                        pageNumber: 1,
                         chunkIndex: globalChunkIndex++,
                         text: chunk
                     });
@@ -22,7 +26,7 @@ export async function parseTxt(file) {
                 reject(err);
             }
         };
-        reader.onerror = (err) => reject(err);
+        reader.onerror = () => reject(new Error('Failed to read text file.'));
         reader.readAsText(file);
     });
 }
