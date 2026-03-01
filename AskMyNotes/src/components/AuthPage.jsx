@@ -29,6 +29,8 @@ function FloatingParticle({ delay, duration, x, y, size }) {
     );
 }
 
+import { loginUser, registerUser } from '../utils/geminiApi';
+
 export default function AuthPage({ onLogin }) {
     const [isSignup, setIsSignup] = useState(false);
     const [name, setName] = useState('');
@@ -47,20 +49,21 @@ export default function AuthPage({ onLogin }) {
         // Simulate a brief loading for polish
         await new Promise(r => setTimeout(r, 400));
 
-        const users = JSON.parse(localStorage.getItem('askmynotes_users') || '{}');
-
-        if (isSignup) {
-            if (users[email]) { setError('Account already exists.'); setLoading(false); return; }
-            users[email] = { name: name.trim(), password, email: email.trim() };
-            localStorage.setItem('askmynotes_users', JSON.stringify(users));
-            onLogin({ name: name.trim(), email: email.trim() });
-        } else {
-            const user = users[email];
-            if (!user) { setError('No account found.'); setLoading(false); return; }
-            if (user.password !== password) { setError('Incorrect password.'); setLoading(false); return; }
-            onLogin({ name: user.name, email: user.email });
+        try {
+            if (isSignup) {
+                const data = await registerUser(name.trim(), email.trim(), password);
+                localStorage.setItem('askmynotes_token', data.token);
+                onLogin(data.user);
+            } else {
+                const data = await loginUser(email.trim(), password);
+                localStorage.setItem('askmynotes_token', data.token);
+                onLogin(data.user);
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const particles = Array.from({ length: 20 }, (_, i) => ({

@@ -2,26 +2,27 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createRequire } from 'module';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { initDb, createUser, getUserByEmail, createSubject, getSubjectsByUser, addNotesChunks, addMessage, deleteSubject } from './database.js';
+
 const require = createRequire(import.meta.url);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY;
+const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const MODEL = 'openrouter/free';
+const JWT_SECRET = process.env.JWT_SECRET || 'askmynotes_super_secret_key_123';
 
-// Initialize Gemini
-const genAI = new GoogleGenerativeAI(API_KEY);
-const MODEL_NAME = 'gemini-2.0-flash';
-
-function getModel(options = {}) {
-    return genAI.getGenerativeModel({ model: MODEL_NAME, ...options });
-}
+// Initialize Database
+await initDb();
 
 // Multer for file uploads (in-memory)
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+    limits: { fileSize: 50 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.txt')) {
             cb(null, true);
@@ -34,54 +35,132 @@ const upload = multer({
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+const authMiddleware = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        req.user = jwt.verify(token, JWT_SECRET);
+        next();
+    } catch (err) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
+};
+
 // ═══════════════════════════════════════════════
-// Helper: Call Gemini with text prompt
+// Auth & Database Endpoints
 // ═══════════════════════════════════════════════
-async function callGemini(systemPrompt, userMessage, options = {}) {
-    const model = getModel({
-        generationConfig: {
-            temperature: options.temperature ?? 0.7,
-            maxOutputTokens: options.maxTokens ?? 2000,
-            ...(options.jsonMode ? { responseMimeType: 'application/json' } : {}),
+app.post('/api/auth/signup', async (req, res) => {
+    try {
+        const { name, email, password } = req.body;
+        const user = await createUser(name, email, password);
+        const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+app.get('/api/auth/me', authMiddleware, (req, res) => {
+    res.json({ user: req.user });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = await getUserByEmail(email);
+        if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+
+        const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/subjects', authMiddleware, async (req, res) => {
+    try {
+        const subjects = await getSubjectsByUser(req.user.id);
+        res.json(subjects);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/subjects', authMiddleware, async (req, res) => {
+    try {
+        const { id, name, colorHex } = req.body;
+        const subject = await createSubject(id, req.user.id, name, colorHex);
+        res.json(subject);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/subjects/:id/chunks', authMiddleware, async (req, res) => {
+    try {
+        const { chunks } = req.body;
+        await addNotesChunks(req.params.id, chunks);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/subjects/:id/messages', authMiddleware, async (req, res) => {
+    try {
+        const { role, content, parsed } = req.body;
+        await addMessage(req.params.id, role, content, parsed);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/subjects/:id', authMiddleware, async (req, res) => {
+    try {
+        await deleteSubject(req.params.id);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════
+// OpenRouter API Helper
+// ═══════════════════════════════════════════════
+async function callOpenRouter(messages, maxTokens = 1024, jsonMode = true) {
+    const body = {
+        model: MODEL,
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+    };
+    if (jsonMode) body.response_format = { type: 'json_object' };
+
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`,
+            'HTTP-Referer': 'https://askmynotes.app',
+            'X-Title': 'AskMyNotes'
         },
-        ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
+        body: JSON.stringify(body)
     });
 
-    const result = await model.generateContent(userMessage);
-    return result.response.text();
-}
-
-// ═══════════════════════════════════════════════
-// Helper: Call Gemini with chat history
-// ═══════════════════════════════════════════════
-async function callGeminiChat(messages, systemPrompt = null, options = {}) {
-    const model = getModel({
-        generationConfig: {
-            temperature: options.temperature ?? 0.7,
-            maxOutputTokens: options.maxTokens ?? 800,
-            ...(options.jsonMode ? { responseMimeType: 'application/json' } : {}),
-        },
-        ...(systemPrompt ? { systemInstruction: systemPrompt } : {}),
-    });
-
-    // Convert messages to Gemini format
-    const history = [];
-    for (let i = 0; i < messages.length - 1; i++) {
-        const msg = messages[i];
-        history.push({
-            role: msg.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: msg.content }],
-        });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `API Error: ${response.status}`);
     }
 
-    const chat = model.startChat({ history });
-    const lastMessage = messages[messages.length - 1];
-    const result = await chat.sendMessage(lastMessage.content);
-    return result.response.text();
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
 }
 
 // ═══════════════════════════════════════════════
-// Mind Map Endpoint (JSON Graph Extraction)
+// Mind Map Endpoint
 // ═══════════════════════════════════════════════
 app.post('/api/mindmap', async (req, res) => {
     try {
@@ -90,7 +169,7 @@ app.post('/api/mindmap', async (req, res) => {
 
         const systemPrompt = `You are an expert knowledge extractor. Generate a mind map JSON from the following text.
 Extract core concepts as "nodes" and their relationships as "edges".
-Respond ONLY with valid JSON in this EXACT format:
+Respond ONLY with valid, unescaped JSON in this EXACT format:
 {
   "nodes": [
     { "id": "1", "data": { "label": "Main Concept" } },
@@ -100,14 +179,39 @@ Respond ONLY with valid JSON in this EXACT format:
     { "id": "e1-2", "source": "1", "target": "2", "label": "relates to" }
   ]
 }
-Keep the graph concise (max 15 nodes) for high-level overview.`;
+Keep the graph concise (max 15 nodes) for high-level overview.
 
-        const content = await callGemini(systemPrompt, `TEXT CONTEXT:\n${textContext.substring(0, 15000)}`, {
+TEXT CONTEXT:
+${textContext.substring(0, 15000)}
+`;
+
+        const body = {
+            model: MODEL,
+            messages: [{ role: 'user', content: systemPrompt }],
             temperature: 0.1,
-            jsonMode: true,
+            response_format: { type: "json_object" }
+        };
+
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${API_KEY}`,
+                'HTTP-Referer': 'https://askmynotes.app',
+                'X-Title': 'AskMyNotes Mindmap'
+            },
+            body: JSON.stringify(body)
         });
 
-        const graphData = JSON.parse(content.replace(/^```json/g, '').replace(/```$/g, '').trim());
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`API error: ${response.status} - ${errBody}`);
+        }
+
+        const data = await response.json();
+        let content = data.choices[0].message.content;
+        content = content.replace(/^```json/g, '').replace(/```$/g, '').trim();
+        const graphData = JSON.parse(content);
         res.json(graphData);
     } catch (err) {
         console.error('[Mindmap Error]', err.message);
@@ -129,7 +233,7 @@ Based ONLY on the provided notes, create an exam consisting of:
 1. 3 Multiple Choice Questions (with 4 options and 1 correct answer)
 2. 2 Open-Ended Short Essay Questions
 
-Respond ONLY with valid JSON in this EXACT format:
+Respond ONLY with valid, unescaped JSON in this EXACT format:
 {
   "mcqs": [
     { "id": "m1", "question": "...", "options": {"A":"...","B":"...","C":"...","D":"..."}, "correctOption": "A" }
@@ -137,14 +241,32 @@ Respond ONLY with valid JSON in this EXACT format:
   "essays": [
     { "id": "e1", "question": "..." }
   ]
-}`;
+}
 
-        const content = await callGemini(systemPrompt, `NOTES CONTEXT:\n${context.substring(0, 15000)}`, {
+NOTES CONTEXT:
+${context.substring(0, 15000)}
+`;
+
+        const body = {
+            model: MODEL,
+            messages: [{ role: 'user', content: systemPrompt }],
             temperature: 0.3,
-            jsonMode: true,
+            response_format: { type: "json_object" }
+        };
+
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify(body)
         });
 
-        res.json(JSON.parse(content.replace(/^```json/g, '').replace(/```$/g, '').trim()));
+        const data = await response.json();
+        let content = data.choices[0].message.content;
+        content = content.replace(/^```json/g, '').replace(/```$/g, '').trim();
+        res.json(JSON.parse(content));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -164,19 +286,37 @@ QUESTION: ${question}
 STUDENT ANSWER: ${studentAnswer}
 
 Based ONLY on the provided notes, grade this answer out of 100. Be critical but fair.
-Respond ONLY with valid JSON in this EXACT format:
+Respond ONLY with valid, unescaped JSON in this EXACT format:
 {
   "score": 85,
   "feedback": "Your explanation of X was great, but you missed Y...",
   "idealPoints": ["Point 1", "Point 2"]
-}`;
+}
 
-        const content = await callGemini(systemPrompt, `NOTES CONTEXT:\n${context.substring(0, 15000)}`, {
+NOTES CONTEXT:
+${context.substring(0, 15000)}
+`;
+
+        const body = {
+            model: MODEL,
+            messages: [{ role: 'user', content: systemPrompt }],
             temperature: 0.2,
-            jsonMode: true,
+            response_format: { type: "json_object" }
+        };
+
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify(body)
         });
 
-        res.json(JSON.parse(content.replace(/^```json/g, '').replace(/```$/g, '').trim()));
+        const data = await response.json();
+        let content = data.choices[0].message.content;
+        content = content.replace(/^```json/g, '').replace(/```$/g, '').trim();
+        res.json(JSON.parse(content));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -191,12 +331,29 @@ app.post('/api/summarize-lecture', async (req, res) => {
         if (!transcript) return res.status(400).json({ error: 'Missing transcript' });
 
         const systemPrompt = `You are an expert academic assistant. Summarize the following live lecture transcript into clear, structured, and easy-to-read study notes.
-Use markdown formatting (bullet points, bold text, headers) to organize the information logically. Extract key terms, definitions, and main themes.`;
+Use markdown formatting (bullet points, bold text, headers) to organize the information logically. Extract key terms, definitions, and main themes.
 
-        const summary = await callGemini(systemPrompt, `TRANSCRIPT:\n${transcript.substring(0, 15000)}`, {
-            temperature: 0.3,
+TRANSCRIPT:
+${transcript.substring(0, 15000)}
+`;
+
+        const body = {
+            model: MODEL,
+            messages: [{ role: 'user', content: systemPrompt }],
+            temperature: 0.3
+        };
+
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${API_KEY}`
+            },
+            body: JSON.stringify(body)
         });
 
+        const data = await response.json();
+        const summary = data.choices[0].message.content;
         res.json({ summary });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -207,7 +364,7 @@ Use markdown formatting (bullet points, bold text, headers) to organize the info
 // Health check
 // ═══════════════════════════════════════════════
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', model: MODEL_NAME, timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', model: MODEL, provider: 'OpenRouter', timestamp: new Date().toISOString() });
 });
 
 // ═══════════════════════════════════════════════
@@ -245,24 +402,40 @@ function chunkText(text, maxChars = 800) {
     return final.filter(c => c.length > 0);
 }
 
-// Function to extract text from an image buffer using Gemini Vision
+// Extract text from image using Gemini Vision via OpenRouter
 async function extractTextFromImage(imageBuffer, pageNum) {
     const base64Img = imageBuffer.toString('base64');
     const prompt = `Extract all text, notes, and meaningful content from this page exactly as written. Format with markdown if necessary. If it's a diagram, describe its key points.`;
 
-    const model = getModel({ generationConfig: { temperature: 0.1 } });
+    const body = {
+        model: MODEL,
+        messages: [{
+            role: 'user',
+            content: [
+                { type: 'text', text: prompt },
+                { type: 'image_url', image_url: { url: `data:image/png;base64,${base64Img}` } }
+            ]
+        }],
+        temperature: 0.1,
+    };
 
-    const result = await model.generateContent([
-        prompt,
-        {
-            inlineData: {
-                mimeType: 'image/png',
-                data: base64Img,
-            },
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${API_KEY}`,
+            'HTTP-Referer': 'https://askmynotes.app',
+            'X-Title': 'AskMyNotes OCR'
         },
-    ]);
+        body: JSON.stringify(body)
+    });
 
-    return result.response.text();
+    if (!response.ok) {
+        throw new Error(`Vision API error on page ${pageNum}: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
 }
 
 app.post('/api/upload', upload.single('file'), async (req, res) => {
@@ -302,7 +475,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
                 pageNum++;
             }
         } else {
-            // TXT files
             const fullText = buffer.toString('utf-8');
             totalChars = fullText.length;
             const textChunks = chunkText(fullText);
@@ -316,12 +488,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
         }
 
         console.log(`[Upload] Finished ${originalname}: ${allChunks.length} chunks, ${totalChars} chars`);
-        res.json({
-            fileName: originalname,
-            chunks: allChunks,
-            totalChunks: allChunks.length,
-            totalChars
-        });
+        res.json({ fileName: originalname, chunks: allChunks, totalChunks: allChunks.length, totalChars });
     } catch (err) {
         console.error('[Upload Error]', err.message);
         res.status(500).json({ error: `Failed to parse file: ${err.message}` });
@@ -337,7 +504,10 @@ app.post('/api/chat', async (req, res) => {
         if (!systemPrompt || !userMessage) {
             return res.status(400).json({ error: 'systemPrompt and userMessage required' });
         }
-        const text = await callGemini(systemPrompt, userMessage, { jsonMode: true });
+        const text = await callOpenRouter([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
+        ]);
         res.json({ text });
     } catch (err) {
         console.error('[/api/chat]', err.message);
@@ -354,7 +524,10 @@ app.post('/api/study', async (req, res) => {
         if (!systemPrompt || !userMessage) {
             return res.status(400).json({ error: 'systemPrompt and userMessage required' });
         }
-        const text = await callGemini(systemPrompt, userMessage, { jsonMode: true });
+        const text = await callOpenRouter([
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
+        ]);
         res.json({ text });
     } catch (err) {
         console.error('[/api/study]', err.message);
@@ -376,10 +549,11 @@ app.post('/api/voice', async (req, res) => {
             ? `You are a helpful voice study assistant for AskMyNotes. Answer questions using the student's notes when relevant. Keep responses concise and conversational (1-3 sentences). Avoid markdown.\n\nStudent's notes context:\n${notesContext}`
             : `You are a helpful voice assistant for AskMyNotes. Keep responses concise and conversational (1-3 sentences). Avoid markdown, bullet points, or lists.`;
 
-        const text = await callGeminiChat(messages, systemMsg, {
-            maxTokens: 800,
-            jsonMode: false,
-        });
+        const text = await callOpenRouter(
+            [{ role: 'system', content: systemMsg }, ...messages],
+            800,
+            false
+        );
 
         res.json({ text });
     } catch (err) {
@@ -393,7 +567,7 @@ app.post('/api/voice', async (req, res) => {
 // ═══════════════════════════════════════════════
 app.listen(PORT, () => {
     console.log(`\n  🚀 AskMyNotes API server running on http://localhost:${PORT}`);
-    console.log(`  📡 Model: ${MODEL_NAME} (Google Gemini)`);
+    console.log(`  📡 Model: ${MODEL} (OpenRouter)`);
     console.log(`  📄 Upload: POST http://localhost:${PORT}/api/upload`);
     console.log(`  💬 Chat: POST http://localhost:${PORT}/api/chat`);
     console.log(`  🎓 Study: POST http://localhost:${PORT}/api/study`);

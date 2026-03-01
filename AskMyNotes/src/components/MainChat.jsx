@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Mic, MicOff, Menu, BookOpen, PanelRightOpen, GraduationCap, Volume2, VolumeX, MessageCircle, Sparkles, Network, ClipboardList, Waves } from 'lucide-react';
 import { useVoice } from '../hooks/useVoice';
 import { retrieveChunks } from '../utils/retrieval';
-import { askAI } from '../utils/geminiApi';
+import { askAI, saveConversationMessage } from '../utils/geminiApi';
 
 function Toast({ message, onClose }) {
     useEffect(() => { const t = setTimeout(onClose, 5000); return () => clearTimeout(t); }, [onClose]);
@@ -159,24 +159,35 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
             // Check for hardcoded MVP responses first (before notes check)
             const lowerQ = question.toLowerCase();
             if (lowerQ.includes('business analytics')) {
-                const h = [...subject.conversationHistory, { role: 'user', content: question }];
-                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: h });
+                const updatedHistory = [...subject.conversationHistory, { role: 'user', content: question }];
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: updatedHistory });
+                await saveConversationMessage(subject.id, { role: 'user', content: question });
+
                 const hardcodedAnswer = {
                     answer: "Business analytics is a process used by companies to measure their business performance and gain insights to solve present and future problems. It involves the use of statistical methods and modern technologies to analyze past data, helping organizations make informed decisions and develop strategic plans. Business analytics is applicable in various areas, including sales, marketing, finance, operations, and customer service. It is a data-driven approach that includes data processing, analysis, and visualization, enabling businesses to identify trends, patterns, and correlations to frame informed decisions and business strategies.",
                     confidence: "High",
                     citations: [],
                     evidenceSnippets: []
                 };
-                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: [...h, { role: 'assistant', content: hardcodedAnswer.answer, parsed: hardcodedAnswer }] });
+
+                const finalHistory = [...updatedHistory, { role: 'assistant', content: hardcodedAnswer.answer, parsed: hardcodedAnswer }];
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: finalHistory });
+                await saveConversationMessage(subject.id, { role: 'assistant', content: hardcodedAnswer.answer, parsed: hardcodedAnswer });
+
                 if (settings.ttsEnabled) speak(hardcodedAnswer.answer, settings.language);
                 return;
             }
 
             if (!subject.notesChunks?.length) {
-                const h = [...subject.conversationHistory, { role: 'user', content: question }];
-                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: h });
+                const updatedHistory = [...subject.conversationHistory, { role: 'user', content: question }];
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: updatedHistory });
+                await saveConversationMessage(subject.id, { role: 'user', content: question });
+
                 const info = { answer: 'NOT_FOUND', subjectName: subject.name };
-                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: [...h, { role: 'assistant', content: info.answer, parsed: info }] });
+
+                const finalHistory = [...updatedHistory, { role: 'assistant', content: info.answer, parsed: info }];
+                dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: finalHistory });
+                await saveConversationMessage(subject.id, { role: 'assistant', content: info.answer, parsed: info });
                 return;
             }
 
@@ -185,12 +196,14 @@ export default function MainChat({ subject, dispatch, setEvidenceCards, setEvide
 
             const updatedHistory = [...subject.conversationHistory, { role: 'user', content: question }];
             dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: updatedHistory });
+            await saveConversationMessage(subject.id, { role: 'user', content: question });
 
             const parsedInfo = await askAI(subject.name, topChunks, subject.conversationHistory, question, settings.language);
             if (parsedInfo.answer === 'NOT_FOUND') parsedInfo.subjectName = subject.name;
 
             const finalHistory = [...updatedHistory, { role: 'assistant', content: parsedInfo.answer, parsed: parsedInfo }];
             dispatch({ type: 'UPDATE_HISTORY', subjectId: subject.id, history: finalHistory });
+            await saveConversationMessage(subject.id, { role: 'assistant', content: parsedInfo.answer, parsed: parsedInfo });
 
             if (parsedInfo.answer !== 'NOT_FOUND') {
                 if (settings.ttsEnabled) speak(parsedInfo.answer, settings.language);

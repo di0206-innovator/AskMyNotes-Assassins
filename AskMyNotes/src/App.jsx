@@ -14,29 +14,29 @@ import Settings from './components/Settings';
 import CustomCursor from './components/CustomCursor';
 import './App.css';
 
-const initialSubjects = [
-  { id: 'sub1', name: 'Subject 1', colorHex: '#6366f1', files: [], notesChunks: [], conversationHistory: [] },
-  { id: 'sub2', name: 'Subject 2', colorHex: '#06b6d4', files: [], notesChunks: [], conversationHistory: [] },
-  { id: 'sub3', name: 'Subject 3', colorHex: '#f59e0b', files: [], notesChunks: [], conversationHistory: [] },
-];
+import { fetchSubjects, getMe } from './utils/geminiApi';
 
 function subjectsReducer(state, action) {
   switch (action.type) {
+    case 'SET_SUBJECTS':
+      return action.subjects;
+    case 'DELETE_SUBJECT':
+      return state.filter(s => s.id !== action.id);
     case 'RENAME_SUBJECT':
       return state.map(s => s.id === action.id ? { ...s, name: action.name } : s);
     case 'ADD_FILE':
-      return state.map(s => s.id === action.subjectId ? { ...s, files: [...s.files, action.file] } : s);
+      return state.map(s => s.id === action.subjectId ? { ...s, files: [...(s.files || []), action.file] } : s);
     case 'REMOVE_FILE':
       return state.map(s => {
         if (s.id !== action.subjectId) return s;
         return {
           ...s,
-          files: s.files.filter(f => f.name !== action.fileName),
-          notesChunks: s.notesChunks.filter(c => c.fileName !== action.fileName)
+          files: (s.files || []).filter(f => f.name !== action.fileName),
+          notesChunks: (s.notesChunks || []).filter(c => c.fileName !== action.fileName)
         };
       });
     case 'ADD_CHUNKS':
-      return state.map(s => s.id === action.subjectId ? { ...s, notesChunks: [...s.notesChunks, ...action.chunks] } : s);
+      return state.map(s => s.id === action.subjectId ? { ...s, notesChunks: [...(s.notesChunks || []), ...action.chunks] } : s);
     case 'UPDATE_HISTORY':
       return state.map(s => s.id === action.subjectId ? { ...s, conversationHistory: action.history } : s);
     default:
@@ -46,8 +46,8 @@ function subjectsReducer(state, action) {
 
 function App() {
   const [user, setUser] = useState(null);
-  const [subjects, dispatch] = useReducer(subjectsReducer, initialSubjects);
-  const [activeSubjectId, setActiveSubjectId] = useState('sub1');
+  const [subjects, dispatch] = useReducer(subjectsReducer, []);
+  const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [activeView, setActiveView] = useState('home'); // 'home', 'subject', 'settings'
 
   const [settings, setSettings] = useState({
@@ -74,6 +74,35 @@ function App() {
     document.documentElement.setAttribute('data-theme', settings.theme);
   }, [settings.theme]);
 
+  // Handle auto-login
+  useEffect(() => {
+    const token = localStorage.getItem('askmynotes_token');
+    if (token && !user) {
+      getMe().then(userData => {
+        if (userData) setUser(userData);
+      }).catch(err => {
+        console.error('Auto login failed:', err);
+        localStorage.removeItem('askmynotes_token');
+      });
+    }
+  }, []);
+
+  // Load Subjects on Login
+  useEffect(() => {
+    if (user) {
+      fetchSubjects().then(subs => {
+        // Initialize missing local state fields for each subject if absent
+        const normalized = subs.map(s => ({ ...s, files: s.files || [], notesChunks: s.notesChunks || [], conversationHistory: s.conversationHistory || [] }));
+        dispatch({ type: 'SET_SUBJECTS', subjects: normalized });
+        if (normalized.length > 0 && !activeSubjectId) {
+          setActiveSubjectId(normalized[0].id);
+        }
+      }).catch(err => {
+        console.error('Failed to load subjects:', err);
+      });
+    }
+  }, [user]);
+
   if (!user) {
     return (
       <>
@@ -98,7 +127,7 @@ function App() {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           userName={user.name}
-          onLogout={() => setUser(null)}
+          onLogout={() => { setUser(null); localStorage.removeItem('askmynotes_token'); }}
           onNavigateHome={() => setActiveView('home')}
           onNavigateSettings={() => setActiveView('settings')}
         />
@@ -114,7 +143,7 @@ function App() {
         {activeView === 'settings' && (
           <Settings
             user={user}
-            onLogout={() => setUser(null)}
+            onLogout={() => { setUser(null); localStorage.removeItem('askmynotes_token'); }}
             settings={settings}
             onUpdateSettings={setSettings}
           />

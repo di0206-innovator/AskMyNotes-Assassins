@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Upload, Trash2, FileText, ChevronRight, LogOut, Sparkles, X, Check, AlertCircle, Loader, Home, Settings as SettingsIcon } from 'lucide-react';
 import { parsePdf } from '../utils/pdfParser';
 import { parseTxt } from '../utils/txtParser';
+import { saveSubjectChunks, createDatabaseSubject, deleteDatabaseSubject } from '../utils/geminiApi';
 
 function EditableName({ name, onSave }) {
     const [editing, setEditing] = useState(false);
@@ -70,6 +71,8 @@ function FileItem({ file, status, onRemove }) {
 
 export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch, isOpen, onClose, userName, onLogout, onNavigateHome, onNavigateSettings }) {
     const [parsing, setParsing] = useState({});
+    const [isAddingSubject, setIsAddingSubject] = useState(false);
+    const [newSubjectName, setNewSubjectName] = useState('');
 
     const handleUpload = async (subjectId, files) => {
         for (const file of Array.from(files)) {
@@ -81,6 +84,9 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
 
             try {
                 const chunks = ext === 'pdf' ? await parsePdf(file) : await parseTxt(file);
+
+                await saveSubjectChunks(subjectId, chunks);
+
                 dispatch({ type: 'ADD_FILE', subjectId, file: { name: file.name, size: file.size } });
                 dispatch({ type: 'ADD_CHUNKS', subjectId, chunks });
                 setParsing(p => ({ ...p, [key]: 'done' }));
@@ -109,27 +115,83 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
 
             {/* Navigation Options */}
             <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <button
+                <motion.button
                     onClick={onNavigateHome}
-                    className="btn-ghost"
+                    className="btn-ghost icon-bounce"
+                    whileHover={{ x: 4, background: 'var(--accent-glow)' }}
+                    whileTap={{ scale: 0.97 }}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-start', padding: '0.6rem 0.8rem', fontSize: '0.9rem' }}
                 >
                     <Home size={18} /> Dashboard Home
-                </button>
-                <button
+                </motion.button>
+                <motion.button
                     onClick={onNavigateSettings}
-                    className="btn-ghost"
+                    className="btn-ghost icon-bounce"
+                    whileHover={{ x: 4, background: 'var(--accent-glow)' }}
+                    whileTap={{ scale: 0.97 }}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-start', padding: '0.6rem 0.8rem', fontSize: '0.9rem' }}
                 >
                     <SettingsIcon size={18} /> System Settings
-                </button>
+                </motion.button>
             </div>
 
             {/* Subjects */}
             <div className="scroll-y" style={{ flex: 1, padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0.35rem 0.5rem', fontWeight: 600 }}>
-                    Study Subjects
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0.5rem' }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
+                        Study Subjects
+                    </div>
+                    <button onClick={() => setIsAddingSubject(true)} style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '1.2rem', lineHeight: 1 }}>+</button>
                 </div>
+
+                <AnimatePresence>
+                    {isAddingSubject && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            style={{ display: 'flex', gap: '6px', marginBottom: '0.5rem', overflow: 'hidden' }}
+                        >
+                            <input
+                                autoFocus
+                                value={newSubjectName}
+                                onChange={(e) => setNewSubjectName(e.target.value)}
+                                onKeyDown={async (e) => {
+                                    if (e.key === 'Escape') {
+                                        setIsAddingSubject(false);
+                                        setNewSubjectName('');
+                                    }
+                                    if (e.key === 'Enter') {
+                                        if (!newSubjectName.trim()) return;
+                                        const colors = ['#6366f1', '#06b6d4', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6'];
+                                        const colorHex = colors[Math.floor(Math.random() * colors.length)];
+                                        const id = 'sub_' + Date.now();
+                                        try {
+                                            const newSub = { id, name: newSubjectName.trim(), colorHex, files: [], notesChunks: [], conversationHistory: [] };
+                                            await createDatabaseSubject({ id, name: newSub.name, colorHex });
+                                            dispatch({ type: 'SET_SUBJECTS', subjects: [...subjects, newSub] });
+                                            onSelect(id);
+                                            setIsAddingSubject(false);
+                                            setNewSubjectName('');
+                                        } catch (err) {
+                                            alert(err.message);
+                                        }
+                                    }
+                                }}
+                                placeholder="Subject name..."
+                                className="input-field"
+                                style={{ flex: 1, padding: '4px 8px', fontSize: '0.82rem' }}
+                            />
+                            <button
+                                onClick={() => { setIsAddingSubject(false); setNewSubjectName(''); }}
+                                className="btn-ghost"
+                                style={{ padding: '0 6px' }}
+                            >
+                                <X size={14} />
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {subjects.map(sub => {
                     const active = sub.id === activeSubjectId;
@@ -137,14 +199,15 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
                         <motion.div
                             key={sub.id}
                             onClick={() => onSelect(sub.id)}
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
+                            whileHover={{ scale: 1.02, x: 3 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={active ? 'sidebar-active-item' : ''}
                             style={{
                                 padding: '0.75rem', cursor: 'pointer', borderRadius: 'var(--radius)',
-                                background: active ? 'var(--bg-elevated)' : 'transparent',
+                                background: active ? 'linear-gradient(90deg, rgba(99,102,241,0.1), transparent)' : 'transparent',
                                 border: active ? '1px solid var(--border-glow)' : '1px solid transparent',
-                                transition: 'all 0.2s',
-                                boxShadow: active ? 'var(--shadow-glow)' : 'none',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: active ? '0 0 20px rgba(99,102,241,0.08)' : 'none',
                             }}
                         >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -161,6 +224,28 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
                                         {sub.files.length}
                                     </span>
                                 )}
+                                <button
+                                    onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (confirm(`Delete subject "${sub.name}"?`)) {
+                                            try {
+                                                await deleteDatabaseSubject(sub.id);
+                                                dispatch({ type: 'DELETE_SUBJECT', id: sub.id });
+                                                if (activeSubjectId === sub.id) {
+                                                    const next = subjects.find(s => s.id !== sub.id);
+                                                    onSelect(next ? next.id : null);
+                                                }
+                                            } catch (err) {
+                                                alert('Failed to delete: ' + err.message);
+                                            }
+                                        }
+                                    }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--error)', opacity: 0.5, cursor: 'pointer', padding: '4px' }}
+                                    onMouseOver={(e) => e.currentTarget.style.opacity = 1}
+                                    onMouseOut={(e) => e.currentTarget.style.opacity = 0.5}
+                                >
+                                    <Trash2 size={14} />
+                                </button>
                             </div>
 
                             {active && (
@@ -200,18 +285,30 @@ export default function Sidebar({ subjects, activeSubjectId, onSelect, dispatch,
 
             {/* User Profile */}
             <div style={{ padding: '0.85rem 1rem', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{
-                    width: '32px', height: '32px', borderRadius: '50%',
-                    background: 'var(--accent-gradient)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '0.8rem', fontWeight: 700, color: '#fff', flexShrink: 0,
-                }}>
-                    {(userName || '?')[0].toUpperCase()}
+                <div style={{ position: 'relative' }}>
+                    <div style={{
+                        width: '34px', height: '34px', borderRadius: '50%',
+                        background: 'var(--accent-gradient)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.8rem', fontWeight: 700, color: '#fff', flexShrink: 0,
+                        boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
+                    }}>
+                        {(userName || '?')[0].toUpperCase()}
+                    </div>
+                    <div className="dot-pulse" style={{
+                        position: 'absolute', bottom: '-1px', right: '-1px',
+                        width: '10px', height: '10px', borderRadius: '50%',
+                        background: 'var(--success)', border: '2px solid var(--bg-primary)',
+                    }} />
                 </div>
                 <div style={{ flex: 1, fontSize: '0.82rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
-                <button onClick={onLogout} className="btn-ghost" style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}>
+                <motion.button onClick={onLogout} className="btn-ghost"
+                    whileHover={{ scale: 1.05, color: 'var(--error)' }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{ padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.72rem' }}
+                >
                     <LogOut size={12} /> Logout
-                </button>
+                </motion.button>
             </div>
         </div>
     );
